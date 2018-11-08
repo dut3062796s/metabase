@@ -13,7 +13,6 @@
              [database :refer [Database]]
              [field :refer [Field]]
              [table :refer [Table]]]
-            [metabase.query-processor.interface :as qpi]
             [metabase.query-processor.middleware.check-features :as check-features]
             [metabase.test
              [data :as data]
@@ -41,7 +40,7 @@
    [3 "The Apple Pan"]
    [4 "Wurstküche"]
    [5 "Brite Spot Family Restaurant"]]
-  (->> (driver/table-rows-sample (Table (data/id :venues))
+  (->> (metadata-queries/table-rows-sample (Table (data/id :venues))
          [(Field (data/id :venues :id))
           (Field (data/id :venues :name))])
        (sort-by first)
@@ -83,7 +82,7 @@
     [:named _ ag-name] ag-name))
 
 (defn- pre-alias-aggregations [outer-query]
-  (binding [qpi/*driver* (driver/engine->driver :bigquery)]
+  (binding [driver/*driver* (driver/engine->driver :bigquery)]
     (aggregation-names (#'bigquery/pre-alias-aggregations outer-query))))
 
 (defn- query-with-aggregations
@@ -119,7 +118,7 @@
 ;; if query has no aggregations then pre-alias-aggregations should do nothing
 (expect
   {}
-  (binding [qpi/*driver* (driver/engine->driver :bigquery)]
+  (binding [driver/*driver* (driver/engine->driver :bigquery)]
     (#'bigquery/pre-alias-aggregations {})))
 
 
@@ -160,7 +159,7 @@
        "ORDER BY `name` ASC")
   ;; normally for test purposes BigQuery doesn't support foreign keys so override the function that checks that and
   ;; make it return `true` so this test proceeds as expected
-  (with-redefs [driver/driver-supports?         (constantly true)
+  (with-redefs [driver/supports?                (constantly true)
                 check-features/driver-supports? (constantly true)]
     (tu/with-temp-vals-in-db 'Field (data/id :venues :category_id) {:fk_target_field_id (data/id :categories :id)
                                                                     :special_type       "type/FK"}

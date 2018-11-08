@@ -1,10 +1,14 @@
 (ns metabase.test.data.redshift
   (:require [clojure.string :as s]
-            [metabase.driver.generic-sql :as sql]
-            [metabase.test.data
-             [generic-sql :as generic]
-             [interface :as i]]
-            [metabase.util :as u])
+            [metabase.test.data.interface :as tx]
+            [metabase.driver.sql.query-processor :as sql.qp]
+            [metabase.test.data.sql :as sql.tx]
+            [metabase.test.data.sql.ddl :as ddl]
+            [metabase.test.data.sql-jdbc.spec :as spec]
+            [metabase.test.data.sql-jdbc.execute :as execute]
+            [metabase.test.data.sql-jdbc.load-data :as load-data]
+            [metabase.util :as u]
+            [metabase.driver.sql-jdbc.connection :as sql-jdbc.conn])
   (:import metabase.driver.redshift.RedshiftDriver))
 
 ;; Time, UUID types aren't supported by redshift
@@ -19,11 +23,11 @@
    :type/Text       "TEXT"})
 
 (def ^:private db-connection-details
-  (delay {:host     (i/db-test-env-var-or-throw :redshift :host)
-          :port     (Integer/parseInt (i/db-test-env-var-or-throw :redshift :port "5439"))
-          :db       (i/db-test-env-var-or-throw :redshift :db)
-          :user     (i/db-test-env-var-or-throw :redshift :user)
-          :password (i/db-test-env-var-or-throw :redshift :password)}))
+  (delay {:host     (tx/db-test-env-var-or-throw :redshift :host)
+          :port     (Integer/parseInt (tx/db-test-env-var-or-throw :redshift :port "5439"))
+          :db       (tx/db-test-env-var-or-throw :redshift :db)
+          :user     (tx/db-test-env-var-or-throw :redshift :user)
+          :password (tx/db-test-env-var-or-throw :redshift :password)}))
 
 
 ;; Redshift is tested remotely, which means we need to support multiple tests happening against the same remote host at the same time.
@@ -41,7 +45,7 @@
   (merge generic/DefaultsMixin
          {:create-db-sql             (constantly nil)
           :drop-db-if-exists-sql     (constantly nil)
-          :drop-table-if-exists-sql  generic/drop-table-if-exists-cascade-sql
+          :drop-table-if-exists-sql  sql.tx/drop-table-if-exists-cascade-sql
           :field-base-type->sql-type (u/drop-first-arg field-base-type->sql-type)
           :pk-sql-type               (constantly "INTEGER IDENTITY(1,1)")
           :qualified-name-components (partial i/single-db-qualified-name-components session-schema-name)})
@@ -56,8 +60,8 @@
 ;;; Create + destroy the schema used for this test session
 
 (defn- execute-when-testing-redshift! [format-str & args]
-  (generic/execute-when-testing! :redshift
-    (fn [] (sql/connection-details->spec (RedshiftDriver.) @db-connection-details))
+  (sql-jdbc.tx/execute-when-testing! :redshift
+    (fn [] (sql-jdbc.conn/connection-details->spec (RedshiftDriver.) @db-connection-details))
     (apply format format-str args)))
 
 (defn- create-session-schema!

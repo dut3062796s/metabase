@@ -25,7 +25,7 @@
   ([sql]
    (parse-template sql {}))
   ([sql param-key->value]
-   (binding [qp.i/*driver* (driver/engine->driver :h2)]
+   (binding [driver/*driver* (driver/engine->driver :h2)]
      (#'sql/parse-template sql param-key->value))))
 
 (expect
@@ -110,7 +110,7 @@
 
 (defn- substitute {:style/indent 1} [sql params]
   ;; apparently you can still bind private dynamic vars
-  (binding [qp.i/*driver* (driver/engine->driver :h2)]
+  (binding [driver/*driver* (driver/engine->driver :h2)]
     ((resolve 'metabase.query-processor.middleware.parameters.sql/expand-query-params)
      {:query sql}
      (into {} (for [[k v] params]
@@ -561,9 +561,9 @@
   (let [sql (:query (qp/query->native (data/mbql-query checkins)))]
     (second (re-find #"FROM\s([^\s()]+)" sql))))
 
-;; as with the MBQL parameters tests Redshift and Crate fail for unknown reasons; disable their tests for now
+;; as with the MBQL parameters tests Redshift fail for unknown reasons; disable their tests for now
 (def ^:private ^:const sql-parameters-engines
-  (disj (qpt/non-timeseries-engines-with-feature :native-parameters) :redshift :crate))
+  (disj (qpt/non-timeseries-engines-with-feature :native-parameters) :redshift))
 
 (defn- process-native {:style/indent 0} [& kvs]
   (du/with-effective-timezone (Database (data/id))
@@ -665,7 +665,7 @@
 (expect
   {:replacement-snippet     "\"test-data\".\"PUBLIC\".\"checkins\".\"date\"",
    :prepared-statement-args nil}
-  (binding [qp.i/*driver* (driver/engine->driver :postgres)]
+  (binding [driver/*driver* (driver/engine->driver :postgres)]
     (#'sql/honeysql->replacement-snippet-info :test-data.PUBLIC.checkins.date)))
 
 ;; Some random end-to-end param expansion tests added as part of the SQL Parameters 2.0 rewrite

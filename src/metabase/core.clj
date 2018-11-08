@@ -154,7 +154,7 @@
   (init-status/set-progress! 0.35)
 
   ;; Load up all of our Database drivers, which are used for app db work
-  (driver/find-and-load-drivers!)
+  (driver.u/find-and-load-all-drivers!)
   (init-status/set-progress! 0.4)
 
   ;; startup database.  validates connection & runs any necessary migrations

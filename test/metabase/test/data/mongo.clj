@@ -1,22 +1,22 @@
 (ns metabase.test.data.mongo
   (:require [metabase.driver.mongo.util :refer [with-mongo-connection]]
-            [metabase.test.data.interface :as i]
+            [metabase.test.data.interface :as tx]
             [metabase.util :as u]
             [monger
              [collection :as mc]
              [core :as mg]])
   (:import metabase.driver.mongo.MongoDriver))
 
-(defn- database->connection-details
+(defmethod tx/database->connection-details
   ([dbdef]
-   {:dbname (i/escaped-name dbdef)
+   {:dbname (tx/escaped-name dbdef)
     :host   "localhost"})
   ([_ _ dbdef]
    (database->connection-details dbdef)))
 
 (defn- destroy-db! [dbdef]
   (with-open [mongo-connection (mg/connect (database->connection-details dbdef))]
-    (mg/drop-db mongo-connection (i/escaped-name dbdef))))
+    (mg/drop-db mongo-connection (tx/escaped-name dbdef))))
 
 (defn- create-db!
   ([db-def]

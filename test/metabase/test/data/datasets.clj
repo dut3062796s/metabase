@@ -13,7 +13,7 @@
              [config :as config]
              [driver :as driver]
              [plugins :as plugins]]
-            [metabase.test.data.interface :as i]
+            [metabase.driver.util :as driver.u]
             [metabase.util.date :as du]))
 
 ;; When running tests, we need to make sure plugins (i.e., the Oracle JDBC driver) are loaded because otherwise the
@@ -21,10 +21,10 @@
 (du/profile "(plugins/load-plugins!) (in metabase.test.data.datasets)"
   (plugins/load-plugins!))
 
-(du/profile "(driver/find-and-load-drivers!) (in metabase.test.data.datasets)"
-  (driver/find-and-load-drivers!))
+(du/profile "(driver.u/find-and-load-all-drivers!) (in metabase.test.data.datasets)"
+  (driver.u/find-and-load-all-drivers!))
 
-(def ^:const all-valid-engines (set (keys (driver/available-drivers))))
+(def ^:const all-valid-engines (set (keys (driver.u/available-drivers))))
 
 ;; # Logic for determining which datasets to test against
 
@@ -80,25 +80,19 @@
 (defn- engine->driver
   "Like `driver/engine->driver`, but reloads the relevant test data namespace as well if needed."
   [engine]
-  (try (i/engine (driver/engine->driver engine))
+  (try (i/engine engine)
        (catch IllegalArgumentException _
          (println "Reloading test extensions: (require " (engine->test-extensions-ns-symbol engine) ":reload)")
          (require (engine->test-extensions-ns-symbol engine) :reload)))
-  (driver/engine->driver engine))
+  engine)
 
-(def ^:dynamic *driver*
-  "The driver we're currently testing against, bound by `with-engine`.
-   This is just a regular driver, e.g. `MySQLDriver`, with an extra promise keyed by `:dbpromise`
-   that is used to store the `test-data` dataset when you call `load-data!`."
-  (engine->driver default-engine))
-
+;; TODO - rename to `do-with-driver`
 (defn do-with-engine
   "Bind `*engine*` and `*driver*` as appropriate for ENGINE and execute F, a function that takes no args."
   {:style/indent 1}
-  [engine f]
+  [driver f]
   {:pre [(keyword? engine)]}
-  (binding [*engine* engine
-            *driver* (engine->driver engine)]
+  (binding [driver/*driver* driver]
     (f)))
 
 (defmacro with-engine

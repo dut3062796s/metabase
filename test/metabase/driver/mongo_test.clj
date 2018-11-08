@@ -34,34 +34,34 @@
 
 (datasets/expect-with-engine :mongo
   false
-  (driver/can-connect-with-details? :mongo {:host   "localhost"
+  (driver.u/can-connect-with-details? :mongo {:host   "localhost"
                                             :port   3000
                                             :dbname "bad-db-name"}))
 
 (datasets/expect-with-engine :mongo
   false
-  (driver/can-connect-with-details? :mongo {}))
+  (driver.u/can-connect-with-details? :mongo {}))
 
 (datasets/expect-with-engine :mongo
   true
-  (driver/can-connect-with-details? :mongo {:host "localhost"
+  (driver.u/can-connect-with-details? :mongo {:host "localhost"
                                             :port 27017
                                             :dbname "metabase-test"}))
 
 ;; should use default port 27017 if not specified
 (datasets/expect-with-engine :mongo
   true
-  (driver/can-connect-with-details? :mongo {:host "localhost"
+  (driver.u/can-connect-with-details? :mongo {:host "localhost"
                                             :dbname "metabase-test"}))
 
 (datasets/expect-with-engine :mongo
   false
-  (driver/can-connect-with-details? :mongo {:host "123.4.5.6"
+  (driver.u/can-connect-with-details? :mongo {:host "123.4.5.6"
                                             :dbname "bad-db-name?connectTimeoutMS=50"}))
 
 (datasets/expect-with-engine :mongo
   false
-  (driver/can-connect-with-details? :mongo {:host "localhost"
+  (driver.u/can-connect-with-details? :mongo {:host "localhost"
                                             :port 3000
                                             :dbname "bad-db-name?connectTimeoutMS=50"}))
 
@@ -150,7 +150,7 @@
    [5 "Brite Spot Family Restaurant"]]
   (driver/sync-in-context (MongoDriver.) (data/db)
     (fn []
-      (vec (take 5 (driver/table-rows-sample (Table (data/id :venues))
+      (vec (take 5 (metadata-queries/table-rows-sample (Table (data/id :venues))
                      [(Field (data/id :venues :id))
                       (Field (data/id :venues :name))]))))))
 

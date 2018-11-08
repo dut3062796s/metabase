@@ -3,7 +3,6 @@
              [driver :as driver]
              [util :as u]]
             [metabase.mbql.util :as mbql.u]
-            [metabase.query-processor.interface :as qp.i]
             [metabase.util.i18n :refer [tru]]))
 
 (defn- driver-supports?
@@ -11,15 +10,15 @@
    (This returns `nil` if `*driver*` is unbound. `*driver*` is always bound when running queries the normal way,
    but may not be when calling this function directly from the REPL.)"
   [feature]
-  (when qp.i/*driver*
-    (driver/driver-supports? qp.i/*driver* feature)))
+  (when driver/*driver*
+    (driver/supports? driver/*driver* feature)))
 
 ;; `assert-driver-supports` doesn't run check when `*driver*` is unbound (e.g., when used in the REPL)
 ;; Allows flexibility when composing queries for tests or interactive development
 (defn assert-driver-supports
   "When `*driver*` is bound, assert that is supports keyword FEATURE."
   [feature]
-  (when qp.i/*driver*
+  (when driver/*driver*
     (when-not (driver-supports? feature)
       (throw (Exception. (str (tru "{0} is not supported by this driver." (name feature))))))))
 

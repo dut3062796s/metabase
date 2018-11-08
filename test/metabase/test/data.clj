@@ -171,7 +171,7 @@
         table-id-for-name (partial db/select-one-id Table, :db_id db-id, :name)]
     (or (table-id-for-name table-name)
         (table-id-for-name (let [db-name (db/select-one-field :name Database :id db-id)]
-                             (i/db-qualified-table-name db-name table-name)))
+                             (tx/db-qualified-table-name db-name table-name)))
         (throw (Exception. (format "No Table '%s' found for Database %d.\nFound: %s" table-name db-id
                                    (u/pprint-to-str (db/select-id->field :name Table, :db_id db-id, :active true))))))))
 
@@ -261,7 +261,7 @@
   (let [db (db/insert! Database
              :name    database-name
              :engine  (name engine)
-             :details (i/database->connection-details driver :db database-definition))]
+             :details (tx/database->connection-details driver :db database-definition))]
     ;; sync newly added DB
     (sync/sync-database! db)
     ;; add extra metadata for fields

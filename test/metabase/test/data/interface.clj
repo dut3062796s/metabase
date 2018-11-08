@@ -71,30 +71,6 @@
   ([session-schema _ db-name table-name]            [session-schema (db-qualified-table-name db-name table-name)])
   ([session-schema _ db-name table-name field-name] [session-schema (db-qualified-table-name db-name table-name) field-name]))
 
-(defn default-aggregate-column-info
-  "Default implementation of `aggregate-column-info` for drivers using the `IDriverTestExtensionsDefaultsMixin`."
-  {:arglists '([driver aggregation-type] [driver aggregation-type field])}
-  ([_ aggregation-type]
-   ;; TODO - cumulative count doesn't require a FIELD !!!!!!!!!
-   (assert (= aggregation-type) :count)
-   {:base_type    :type/Integer
-    :special_type :type/Number
-    :name         "count"
-    :display_name "count"
-    :source       :aggregation})
-  ([driver aggregation-type {:keys [base_type special_type]}]
-   {:pre [base_type special_type]}
-   (merge
-    {:base_type    base_type
-     :special_type special_type
-     :settings     nil
-     :name         (name aggregation-type)
-     :display_name (name aggregation-type)
-     :source       :aggregation}
-    ;; count always gets the same special type regardless
-    (when (= aggregation-type :count)
-      (default-aggregate-column-info driver :count)))))
-
 
 (defprotocol IMetabaseInstance
   (metabase-instance [this context]
@@ -122,69 +98,127 @@
     (Database :name database-name, :engine (name engine-kw))))
 
 
-;; ## IDriverTestExtensions
+;;; +----------------------------------------------------------------------------------------------------------------+
+;;; |                                          Registering Test Extensions                                           |
+;;; +----------------------------------------------------------------------------------------------------------------+
 
-(defprotocol IDriverTestExtensions
-  "Methods for creating, deleting, and populating *pyhsical* DBMS databases, tables, and fields.
-   Methods marked *OPTIONAL* have default implementations in `IDriverTestExtensionsDefaultsMixin`."
-  (engine ^clojure.lang.Keyword [this]
-    "Return the engine keyword associated with this database, e.g. `:h2` or `:mongo`.")
+(driver/register! ::test-extensions, :abstract? true)
 
-  (database->connection-details [this, ^Keyword context, ^DatabaseDefinition database-definition]
-    "Return the connection details map that should be used to connect to this database (i.e. a Metabase `Database`
-     details map). CONTEXT is one of:
+(defn has-test-extensions? [driver]
+  (isa? driver/hierarchy driver ::test-extensions))
 
- *  `:server` - Return details for making the connection in a way that isn't DB-specific (e.g., for
-                creating/destroying databases)
- *  `:db`     - Return details for connecting specifically to the DB.")
-
-  (create-db!
-    [this, ^DatabaseDefinition database-definition]
-    [this, ^DatabaseDefinition database-definition {:keys [skip-drop-db?]}]
-    "Create a new database from DATABASE-DEFINITION, including adding tables, fields, and foreign key constraints,
-     and add the appropriate data. This method should drop existing databases with the same name if applicable, unless
-     the skip-drop-db? arg is true. This is to workaround a scenario where the postgres driver terminates the
-     connection before dropping the DB and causes some tests to fail.
-     (This refers to creating the actual *DBMS* database itself, *not* a Metabase `Database` object.)
-
- Optional `options` as third param. Currently supported options include `skip-drop-db?`. If unspecified,`skip-drop-db?`
- should default to `false`.")
-
-  (expected-base-type->actual [this base-type]
-    "*OPTIONAL*. Return the base type type that is actually used to store `Fields` of BASE-TYPE.
-     The default implementation of this method is an identity fn. This is provided so DBs that don't support a given
-     BASE-TYPE used in the test data can specifiy what type we should expect in the results instead. For example,
-     Oracle has no `INTEGER` data types, so `:type/Integer` test values are instead stored as `NUMBER`, which we map
-     to `:type/Decimal`.")
-
-  (format-name ^String [this, ^String table-or-field-name]
-    "*OPTIONAL* Transform a lowercase string `Table` or `Field` name in a way appropriate for this dataset
-     (e.g., `h2` would want to upcase these names; `mongo` would want to use `\"_id\"` in place of `\"id\"`.")
-
-  (has-questionable-timezone-support? ^Boolean [this]
-    "*OPTIONAL*. Does this driver have \"questionable\" timezone support? (i.e., does it group things by UTC instead
-     of the `US/Pacific` when we're testing?).
-     Defaults to `(not (contains? (metabase.driver/features this) :set-timezone)`")
-
-  (id-field-type ^clojure.lang.Keyword [this]
-    "*OPTIONAL* Return the `base_type` of the `id` `Field` (e.g. `:type/Integer` or `:type/BigInteger`). Defaults to
-    `:type/Integer`.")
-
-  (aggregate-column-info [this aggregation-type] [this aggregation-type field]
-    "*OPTIONAL*. Return the expected type information that should come back for QP results as part of `:cols` for an
-     aggregation of a given type (and applied to a given Field, when applicable)."))
-
-(def IDriverTestExtensionsDefaultsMixin
-  "Default implementations for the `IDriverTestExtensions` methods marked *OPTIONAL*."
-  {:expected-base-type->actual         (u/drop-first-arg identity)
-   :format-name                        (u/drop-first-arg identity)
-   :has-questionable-timezone-support? (fn [driver]
-                                         (not (contains? (driver/features driver) :set-timezone)))
-   :id-field-type                      (constantly :type/Integer)
-   :aggregate-column-info              default-aggregate-column-info})
+(defn add-test-extensions! [driver]
+  (driver/add-parent! driver ::test-extensions))
 
 
-;; ## Helper Functions for Creating New Definitions
+;;; +----------------------------------------------------------------------------------------------------------------+
+;;; |                                            Interface (Multimethods)                                            |
+;;; +----------------------------------------------------------------------------------------------------------------+
+
+(defmulti database->connection-details
+  "Return the connection details map that should be used to connect to this database (i.e. a Metabase `Database`
+  details map). `context` is one of:
+
+  *  `:server` - Return details for making the connection in a way that isn't DB-specific (e.g., for
+                 creating/destroying databases)
+  *  `:db`     - Return details for connecting specifically to the DB."
+  {:arglists '([[driver context database-definition]])}
+  driver/dispatch-on-driver
+  :hierarchy #'driver/hierarchy)
+
+
+(defmulti create-db!
+  "Create a new database from `database-definition`, including adding tables, fields, and foreign key constraints,
+  and add the appropriate data. This method should drop existing databases with the same name if applicable, unless
+  the skip-drop-db? arg is true. This is to workaround a scenario where the postgres driver terminates the connection
+  before dropping the DB and causes some tests to fail. (This refers to creating the actual *DBMS* database itself,
+  *not* a Metabase `Database` object.)
+
+  Optional `options` as third param. Currently supported options include `skip-drop-db?`. If unspecified,
+  `skip-drop-db?` should default to `false`."
+  {:arglists '([driver database-definition & {:keys [skip-drop-db?]}])}
+  driver/dispatch-on-driver
+  :hierarchy #'driver/hierarchy)
+
+
+(defmulti expected-base-type->actual
+  "Return the base type type that is actually used to store Fields of `base-type`. The default implementation of this
+  method is an identity fn. This is provided so DBs that don't support a given base type used in the test data can
+  specifiy what type we should expect in the results instead. For example, Oracle has no `INTEGER` data types, so
+  `:type/Integer` test values are instead stored as `NUMBER`, which we map to `:type/Decimal`."
+  {:arglists '([driver base-type])}
+  driver/dispatch-on-driver
+  :hierarchy #'driver/hierarchy)
+
+(defmethod expected-base-type->actual ::test-extensions [_ base-type] base-type)
+
+
+(defmulti format-name
+  "Transform a lowercase string Table or Field name in a way appropriate for this dataset (e.g., `h2` would want to
+  upcase these names; `mongo` would want to use `\"_id\"` in place of `\"id\"`. This method should return a string.
+  Defaults to an identity implementation."
+  {:arglists '([driver table-or-field-name])}
+  driver/dispatch-on-driver
+  :hierarchy #'driver/hierarchy)
+
+(defmethod format-name ::test-extensions [_ table-or-field-name] table-or-field-name)
+
+
+(defmulti has-questionable-timezone-support?
+  "Does this driver have \"questionable\" timezone support? (i.e., does it group things by UTC instead of the
+  `US/Pacific` when we're testing?). Defaults to `(not (driver/supports? driver) :set-timezone)`."
+  {:arglists '([driver])}
+  driver/dispatch-on-driver
+  :hierarchy #'driver/hierarchy)
+
+(defmethod has-questionable-timezone-support? ::test-extensions [driver]
+  (not (driver/supports? driver :set-timezone)))
+
+
+(defmulti id-field-type
+  "Return the `base_type` of the `id` Field (e.g. `:type/Integer` or `:type/BigInteger`). Defaults to `:type/Integer`."
+  {:arglists '([driver])}
+  driver/dispatch-on-driver
+  :hierarchy #'driver/hierarchy)
+
+(defmethod id-field-type ::test-extensions [_] :type/Integer)
+
+
+(defmulti aggregate-column-info
+  "Return the expected type information that should come back for QP results as part of `:cols` for an aggregation of a
+  given type (and applied to a given Field, when applicable)."
+  {:arglists '([driver aggregation-type] [driver aggregation-type field])}
+  driver/dispatch-on-driver
+  :hierarchy #'driver/hierarchy)
+
+(defmethod aggregate-column-info ::test-extensions
+  ([_ aggregation-type]
+   ;; TODO - cumulative count doesn't require a FIELD !!!!!!!!!
+   (assert (= aggregation-type) :count)
+   {:base_type    :type/Integer
+    :special_type :type/Number
+    :name         "count"
+    :display_name "count"
+    :source       :aggregation})
+  ([driver aggregation-type {:keys [base_type special_type]}]
+   {:pre [base_type special_type]}
+   (merge
+    {:base_type    base_type
+     :special_type special_type
+     :settings     nil
+     :name         (name aggregation-type)
+     :display_name (name aggregation-type)
+     :source       :aggregation}
+    ;; count always gets the same special type regardless
+    (when (= aggregation-type :count)
+      (aggregate-column-info driver :count)))))
+
+
+;;; +----------------------------------------------------------------------------------------------------------------+
+;;; |                                 Helper Functions for Creating New Definitions                                  |
+;;; +----------------------------------------------------------------------------------------------------------------+
+
+;; TODO - not sure everything below belongs in this namespace
 
 (defn create-field-definition
   "Create a new `FieldDefinition`; verify its values."
@@ -208,7 +242,7 @@
                                    :table-definitions (mapv (partial apply create-table-definition)
                                                             table-name+field-definition-maps+rows)})))
 
-(def ^:private ^:const edn-definitions-dir "./test/metabase/test/data/dataset_definitions/")
+(def ^:private edn-definitions-dir "./test/metabase/test/data/dataset_definitions/")
 
 (defn slurp-edn-table-def [dbname]
   (edn/read-string (slurp (str edn-definitions-dir dbname ".edn"))))

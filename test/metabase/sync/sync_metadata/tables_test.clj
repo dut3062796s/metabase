@@ -3,7 +3,7 @@
   (:require [expectations :refer :all]
             [metabase.models.table :refer [Table]]
             [metabase.test.data :as data]
-            [metabase.test.data.interface :as i]
+            [metabase.test.data.interface :as tx]
             [toucan.db :as db]))
 
 (i/def-database-definition ^:const ^:private db-with-some-cruft

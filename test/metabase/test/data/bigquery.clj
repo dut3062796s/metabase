@@ -2,6 +2,14 @@
   (:require [clj-time
              [coerce :as tcoerce]
              [format :as tformat]]
+                        [metabase.test.data.interface :as tx]
+            [metabase.driver.sql.query-processor :as sql.qp]
+            [metabase.test.data.sql :as sql.tx]
+            [metabase.test.data.sql.ddl :as ddl]
+            [metabase.test.data.sql-jdbc.spec :as spec]
+            [metabase.test.data.sql-jdbc.execute :as execute]
+            [metabase.test.data.sql-jdbc.load-data :as load-data]
+
             [clojure.string :as str]
             [medley.core :as m]
             [metabase.driver
@@ -30,7 +38,7 @@
 (def ^:private ^:const details
   (datasets/when-testing-engine :bigquery
     (reduce (fn [acc env-var]
-              (assoc acc env-var (i/db-test-env-var-or-throw :bigquery env-var)))
+              (assoc acc env-var (tx/db-test-env-var-or-throw :bigquery env-var)))
             {} [:project-id :client-id :client-secret :access-token :refresh-token])))
 
 (def ^:private ^:const ^String project-id (:project-id details))
@@ -39,7 +47,7 @@
   (datasets/when-testing-engine :bigquery
     (#'bigquery/database->client {:details details})))
 
-(defn- database->connection-details
+(defmethod tx/database->connection-details
   ([_ {:keys [database-name]}]
    (database->connection-details database-name))
   ([database-name]

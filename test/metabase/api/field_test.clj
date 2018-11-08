@@ -37,7 +37,7 @@
      :is_full_sync                true
      :is_on_demand                false
      :description                 nil
-     :features                    (mapv name (driver/features (driver/engine->driver :h2)))
+     :features                    (mapv name (driver/features :h2))
      :cache_field_values_schedule "0 50 0 * * ? *"
      :metadata_sync_schedule      "0 50 * * * ? *"
      :options                     nil

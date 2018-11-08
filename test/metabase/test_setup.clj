@@ -5,6 +5,7 @@
              [set :as set]]
             [clojure.tools.logging :as log]
             [expectations :refer :all]
+            [metabase.driver.util :as driver.u]
             [metabase
              [core :as core]
              [db :as mdb]
@@ -64,8 +65,8 @@
 
 ;; `test-startup` function won't work for loading the drivers because they need to be available at evaluation time for
 ;; some of the unit tests work work properly
-(du/profile "(driver/find-and-load-drivers!) (in metabase.test-setup)"
-  (driver/find-and-load-drivers!))
+(du/profile "(driver.u/find-and-load-all-drivers!) (in metabase.test-setup)"
+  (driver.u/find-and-load-all-drivers!))
 
 (defn test-startup
   {:expectations-options :before-run}

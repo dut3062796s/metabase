@@ -1,15 +1,19 @@
 (ns metabase.test.data.snowflake
   (:require [clojure.java.jdbc :as jdbc]
             [clojure.string :as str]
-            [metabase.driver.generic-sql :as sql]
-            [metabase.test.data
-             [generic-sql :as generic]
-             [interface :as i]]
+            [metabase.test.data.interface :as tx]
+            [metabase.driver.sql.query-processor :as sql.qp]
+            [metabase.test.data.sql :as sql.tx]
+            [metabase.test.data.sql.ddl :as ddl]
+            [metabase.test.data.sql-jdbc.spec :as spec]
+            [metabase.test.data.sql-jdbc.execute :as execute]
+            [metabase.test.data.sql-jdbc.load-data :as load-data]
             [metabase.util :as u]
             [honeysql.core :as hsql]
             [honeysql.helpers :as h]
             [metabase.util.honeysql-extensions :as hx]
-            [honeysql.format :as hformat])
+            [honeysql.format :as hformat]
+            [metabase.driver.sql-jdbc.connection :as sql-jdbc.conn])
   (:import metabase.driver.snowflake.SnowflakeDriver))
 
 (def ^:private ^SnowflakeDriver snowflake-driver (SnowflakeDriver.))
@@ -25,12 +29,12 @@
    :type/Text       "TEXT"
    :type/Time       "TIME"})
 
-(defn- database->connection-details [context {:keys [database-name]}]
+(defmethod tx/database->connection-details [context {:keys [database-name]}]
   (merge
-   {:account   (i/db-test-env-var-or-throw :snowflake :account)
-    :user      (i/db-test-env-var-or-throw :snowflake :user)
-    :password  (i/db-test-env-var-or-throw :snowflake :password)
-    :warehouse (i/db-test-env-var-or-throw :snowflake :warehouse)
+   {:account   (tx/db-test-env-var-or-throw :snowflake :account)
+    :user      (tx/db-test-env-var-or-throw :snowflake :user)
+    :password  (tx/db-test-env-var-or-throw :snowflake :password)
+    :warehouse (tx/db-test-env-var-or-throw :snowflake :warehouse)
     ;; SESSION parameters
     :timezone "UTC"}
    ;; Snowflake JDBC driver ignores this, but we do use it in the `query-db-name` function in
@@ -49,7 +53,7 @@
   (let [db (generic/qualify+quote-name driver database-name)]
     (format "DROP DATABASE IF EXISTS %s; CREATE DATABASE %s;" db db)))
 
-(defn- expected-base-type->actual [base-type]
+(defmethod tx/expected-base-type->actual [base-type]
   (if (isa? base-type :type/Integer)
     :type/Number
     base-type))
@@ -59,7 +63,7 @@
 (defn- no-db-connection-spec
   "Connection spec for connecting to our Snowflake instance without specifying a DB."
   []
-  (sql/connection-details->spec snowflake-driver (database->connection-details nil nil)))
+  (sql-jdbc.conn/connection-details->spec snowflake-driver (database->connection-details nil nil)))
 
 (defn- existing-dataset-names []
   (let [db-spec (no-db-connection-spec)]
@@ -102,7 +106,7 @@
   (merge generic/DefaultsMixin
          {:field-base-type->sql-type (u/drop-first-arg field-base-type->sql-type)
           :create-db-sql             create-db-sql
-          :execute-sql!              generic/sequentially-execute-sql!
+          :execute-sql!              execute/sequentially-execute-sql!
           :pk-sql-type               (constantly "INTEGER AUTOINCREMENT")
           :qualified-name-components qualified-name-components
           :load-data!                generic/load-data-add-ids!})

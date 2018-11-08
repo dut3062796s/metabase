@@ -187,7 +187,7 @@
   (set (filter some? (conj (for [engine datasets/all-valid-engines]
                              (datasets/when-testing-engine engine
                                (merge default-db-details
-                                      (match-$ (data/get-or-create-test-data-db! (driver/engine->driver engine))
+                                      (match-$ (data/get-or-create-test-data-db! engine)
                                         {:created_at         $
                                          :engine             (name $engine)
                                          :id                 $
@@ -195,7 +195,7 @@
                                          :timezone           $
                                          :name               "test-data"
                                          :native_permissions "write"
-                                         :features           (map name (driver/features (driver/engine->driver engine)))}))))
+                                         :features           (map name (driver/features engine))}))))
                            (merge default-db-details
                                   (match-$ (Database db-id)
                                     {:created_at         $
@@ -227,7 +227,7 @@
                        :features           (map name (driver/features (driver/engine->driver :postgres)))}))
              (filter identity (for [engine datasets/all-valid-engines]
                                 (datasets/when-testing-engine engine
-                                  (let [database (data/get-or-create-test-data-db! (driver/engine->driver engine))]
+                                  (let [database (data/get-or-create-test-data-db! engine)]
                                     (merge default-db-details
                                            (match-$ database
                                              {:created_at         $
@@ -239,7 +239,7 @@
                                               :native_permissions "write"
                                               :tables             (sort-by :name (for [table (db/select Table, :db_id (:id database))]
                                                                                    (table-details table)))
-                                              :features           (map name (driver/features (driver/engine->driver engine)))}))))))))
+                                              :features           (map name (driver/features engine))}))))))))
   (->> ((user->client :rasta) :get 200 "database" :include_tables true)
        (filter #(#{"test-data" db-name} (:name %)))
        set))
@@ -277,7 +277,7 @@
             :updated_at $
             :name       "test-data"
             :timezone   $
-            :features   (mapv name (driver/features (driver/engine->driver :h2)))
+            :features   (mapv name (driver/features :h2))
             :tables     [(merge default-table-details
                                 (match-$ (Table (data/id :categories))
                                   {:schema       "PUBLIC"
@@ -599,7 +599,7 @@
 ;; and using `with-redefs` to disable it in the few tests where it makes sense, we actually have to use `with-redefs`
 ;; here to simulate its *normal* behavior. :unamused:
 (defn- test-database-connection [engine details]
-  (if (driver/can-connect-with-details? (keyword engine) details)
+  (if (driver.u/can-connect-with-details? (keyword engine) details)
     nil
     {:valid false, :message "Error!"}))
 

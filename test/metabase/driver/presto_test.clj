@@ -77,7 +77,7 @@
              {:name "venues"     :schema "default"}
              {:name "checkins"   :schema "default"}
              {:name "users"      :schema "default"}}}
-  (driver/describe-database (PrestoDriver.) (data/db)))
+  (driver/describe-database :presto (data/db)))
 
 ;; DESCRIBE-TABLE
 (datasets/expect-with-engine :presto
@@ -101,7 +101,7 @@
              {:name          "id"
               :database-type "integer"
               :base-type     :type/Integer}}}
-  (driver/describe-table (PrestoDriver.) (data/db) (db/select-one 'Table :id (data/id :venues))))
+  (driver/describe-table :presto (data/db) (db/select-one 'Table :id (data/id :venues))))
 
 ;;; TABLE-ROWS-SAMPLE
 (datasets/expect-with-engine :presto
@@ -110,7 +110,7 @@
    ["The Apple Pan"]
    ["Wurstküche"]
    ["Brite Spot Family Restaurant"]]
-  (take 5 (driver/table-rows-sample (Table (data/id :venues))
+  (take 5 (metadata-queries/table-rows-sample (Table (data/id :venues))
             [(Field (data/id :venues :name))])))
 
 
@@ -144,7 +144,7 @@
                    :tunnel-port    22
                    :tunnel-user    "bogus"}]
       (tu.log/suppress-output
-        (driver/can-connect-with-details? engine details :rethrow-exceptions)))
+        (driver.u/can-connect-with-details? engine details :rethrow-exceptions)))
     (catch Exception e
       (.getMessage e))))
 

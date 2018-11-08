@@ -4,13 +4,13 @@
             [metabase.driver.druid :as druid]
             [metabase.test.data
              [dataset-definitions :as defs]
-             [interface :as i]]
+             [interface :as tx]]
             [metabase.util :as u])
   (:import metabase.driver.druid.DruidDriver))
 
-(defn- database->connection-details [& _]
-  {:host (i/db-test-env-var-or-throw :druid :host)
-   :port (Integer/parseInt (i/db-test-env-var-or-throw :druid :port))})
+(defmethod tx/database->connection-details [& _]
+  {:host (tx/db-test-env-var-or-throw :druid :host)
+   :port (Integer/parseInt (tx/db-test-env-var-or-throw :druid :port))})
 
 (u/strict-extend DruidDriver
   i/IDriverTestExtensions

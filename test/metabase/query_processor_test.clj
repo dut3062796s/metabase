@@ -39,7 +39,7 @@
   [feature & more-features]
   (let [features (set (cons feature more-features))]
     (set (for [engine non-timeseries-engines
-               :when  (set/subset? features (driver/features (driver/engine->driver engine)))]
+               :when  (set/subset? features (driver/features engine))]
            engine))))
 
 (defn non-timeseries-engines-without-feature

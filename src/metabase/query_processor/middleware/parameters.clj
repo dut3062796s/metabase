@@ -2,7 +2,7 @@
   "Middleware for substituting parameters in queries."
   (:require [clojure.data :as data]
             [clojure.tools.logging :as log]
-            [metabase.driver.generic-sql.util.unprepare :as unprepare]
+            [metabase.driver.sql.util.unprepare :as unprepare]
             [metabase.query-processor.interface :as i]
             [metabase.query-processor.middleware.parameters
              [mbql :as mbql-params]

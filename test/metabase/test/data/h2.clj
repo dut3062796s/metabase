@@ -2,12 +2,20 @@
   "Code for creating / destroying an H2 database from a `DatabaseDefinition`."
   (:require [clojure.string :as str]
             [metabase.db.spec :as dbspec]
-            metabase.driver.h2 ; because we import metabase.driver.h2.H2Driver below
-            [metabase.test.data
-             [generic-sql :as generic]
-             [interface :as i]]
-            [metabase.util :as u])
+            [metabase.test.data.interface :as tx]
+            [metabase.driver.sql.query-processor :as sql.qp]
+            [metabase.test.data.sql :as sql.tx]
+            [metabase.test.data.sql.ddl :as ddl]
+            [metabase.test.data.sql-jdbc.spec :as spec]
+            [metabase.test.data.sql-jdbc.execute :as execute]
+            [metabase.test.data.sql-jdbc.load-data :as load-data]
+            [metabase.util :as u]
+            [metabase.test.data.sql-jdbc :as sql-jdbc.tx])
   (:import metabase.driver.h2.H2Driver))
+
+(sql-jdbc.tx/add-test-extensions! :h2)
+
+(sql.tx/add-inline-comment-extensions! :h2)
 
 (def ^:private ^:const field-base-type->sql-type
   {:type/BigInteger "BIGINT"
@@ -21,8 +29,8 @@
    :type/Time       "TIME"})
 
 
-(defn- database->connection-details [context dbdef]
-  {:db (str "mem:" (i/escaped-name dbdef) (when (= context :db)
+(defmethod tx/database->connection-details [context dbdef]
+  {:db (str "mem:" (tx/escaped-name dbdef) (when (= context :db)
                                             ;; Return details with the GUEST user added so SQL queries are allowed.
                                             ";USER=GUEST;PASSWORD=guest"))})
 
@@ -43,41 +51,28 @@
    ;; Set it to to -1 (no automatic closing)
    "SET DB_CLOSE_DELAY -1;"))
 
-(defn- create-table-sql [this dbdef {:keys [table-name], :as tabledef}]
+(defmethod sql.tx/create-table-sql :h2 [_ dbdef {:keys [table-name], :as tabledef}]
   (str
-   (generic/default-create-table-sql this dbdef tabledef) ";\n"
+   (sql.tx/create-table-sql :sql/test-extensions dbdef tabledef) ";\n"
 
    ;; Grant the GUEST account r/w permissions for this table
    (format "GRANT ALL ON %s TO GUEST;" (quote-name table-name))))
 
+(defmethod tx/id-field-type :h2 [_] :type/BigInteger)
 
-(u/strict-extend H2Driver
-  generic/IGenericSQLTestExtensions
-  (let [{:keys [execute-sql!], :as mixin} generic/DefaultsMixin]
-    (merge mixin
-           {:create-db-sql                (constantly create-db-sql)
-            :create-table-sql             create-table-sql
-            ;; Don't use the h2 driver implementation, which makes the connection string read-only & if-exists only
-            :database->spec               (comp dbspec/h2 i/database->connection-details)
-            :drop-db-if-exists-sql        (constantly nil)
-            :execute-sql!                 (fn [this _ dbdef sql]
-                                            ;; we always want to use 'server' context when execute-sql! is called (never
-                                            ;; try connect as GUEST, since we're not giving them priviledges to create
-                                            ;; tables / etc)
-                                            (execute-sql! this :server dbdef sql))
-            :field-base-type->sql-type    (u/drop-first-arg field-base-type->sql-type)
-            :load-data!                   generic/load-data-all-at-once!
-            :pk-field-name                (constantly "ID")
-            :pk-sql-type                  (constantly "BIGINT AUTO_INCREMENT")
-            :prepare-identifier           (u/drop-first-arg str/upper-case)
-            :quote-name                   (u/drop-first-arg quote-name)
-            :inline-column-comment-sql    generic/standard-inline-column-comment-sql
-            :standalone-table-comment-sql generic/standard-standalone-table-comment-sql}))
-
-  i/IDriverTestExtensions
-  (merge generic/IDriverTestExtensionsMixin
-         {:database->connection-details       (u/drop-first-arg database->connection-details)
-          :engine                             (constantly :h2)
-          :format-name                        (u/drop-first-arg str/upper-case)
-          :has-questionable-timezone-support? (constantly true)
-          :id-field-type                      (constantly :type/BigInteger)}))
+:create-db-sql                (constantly create-db-sql)
+:create-table-sql             create-table-sql
+;; Don't use the h2 driver implementation, which makes the connection string read-only & if-exists only
+:database->spec               (comp dbspec/h2 tx/database->connection-details)
+:drop-db-if-exists-sql        (constantly nil)
+:execute-sql!                 (fn [this _ dbdef sql]
+                                ;; we always want to use 'server' context when execute-sql! is called (never
+                                ;; try connect as GUEST, since we're not giving them priviledges to create
+                                ;; tables / etc)
+                                (execute-sql! this :server dbdef sql))
+:field-base-type->sql-type    (u/drop-first-arg field-base-type->sql-type)
+:load-data!                   load-data/load-data-all-at-once!
+:pk-field-name                (constantly "ID")
+:pk-sql-type                  (constantly "BIGINT AUTO_INCREMENT")
+:prepare-identifier           (u/drop-first-arg str/upper-case)
+:quote-name                   (u/drop-first-arg quote-name)

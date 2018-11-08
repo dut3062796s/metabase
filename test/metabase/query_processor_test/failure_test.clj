@@ -18,7 +18,7 @@
    :query    {:source-table (data/id :venues)
               :fields       [[:datetime-field [:field-id (data/id :venues :id)] :month]]
               :limit        qp.i/absolute-max-results}
-   :driver   (H2Driver.)
+   :driver   :h2
    :settings {}})
 
 (def ^:private bad-query:native

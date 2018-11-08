@@ -6,12 +6,16 @@
              [format :as hformat]
              [helpers :as h]]
             [metabase.driver
-             [generic-sql :as sql]
+
              [hive-like :as hive-like]]
-            [metabase.driver.generic-sql.query-processor :as sqlqp]
-            [metabase.test.data
-             [generic-sql :as generic]
-             [interface :as i]]
+            [metabase.driver.sql.query-processor :as sql.qp]
+            [metabase.test.data.interface :as tx]
+            [metabase.driver.sql.query-processor :as sql.qp]
+            [metabase.test.data.sql :as sql.tx]
+            [metabase.test.data.sql.ddl :as ddl]
+            [metabase.test.data.sql-jdbc.spec :as spec]
+            [metabase.test.data.sql-jdbc.execute :as execute]
+            [metabase.test.data.sql-jdbc.load-data :as load-data]
             [metabase.util :as u]
             [metabase.util.honeysql-extensions :as hx])
   (:import metabase.driver.sparksql.SparkSQLDriver))
@@ -43,7 +47,7 @@
   ([_ _ field-name]
    (dashes->underscores field-name)))
 
-(defn- database->connection-details [context {:keys [database-name]}]
+(defmethod tx/database->connection-details [context {:keys [database-name]}]
   (merge {:host     "localhost"
           :port     10000
           :user     "admin"
@@ -61,13 +65,13 @@
         columns     (keys (first rows))
         values      (for [row rows]
                       (for [value (map row columns)]
-                        (sqlqp/->honeysql driver value)))
+                        (sql.qp/->honeysql driver value)))
         hsql-form   (-> (h/insert-into (prepare-key table-name))
                         (h/values values))
         sql+args    (hive-like/unprepare
                      (hx/unescape-dots (binding [hformat/*subquery?* false]
                                          (hsql/format hsql-form
-                                                      :quoting             (sql/quote-style driver)
+                                                      :quoting             (sql.qp/quote-style driver)
                                                       :allow-dashed-names? false))))]
     (with-open [conn (jdbc/get-connection spec)]
       (try
@@ -99,7 +103,7 @@
             pk-field-name (generic/pk-sql-type driver)
             pk-field-name)))
 
-(defn- drop-table-if-exists-sql [driver {:keys [database-name]} {:keys [table-name]}]
+(defmethod sql.tx/drop-table-if-exists-sql [driver {:keys [database-name]} {:keys [table-name]}]
   (format "DROP TABLE IF EXISTS %s" (generic/qualify+quote-name driver database-name table-name)))
 
 (defn- drop-db-if-exists-sql [driver {:keys [database-name]}]
@@ -109,7 +113,7 @@
   generic/IGenericSQLTestExtensions
   (merge generic/DefaultsMixin
          {:add-fk-sql                (constantly nil)
-          :execute-sql!              generic/sequentially-execute-sql!
+          :execute-sql!              execute/sequentially-execute-sql!
           :field-base-type->sql-type (u/drop-first-arg field-base-type->sql-type)
           :create-table-sql          create-table-sql
           :drop-table-if-exists-sql  drop-table-if-exists-sql

@@ -31,7 +31,7 @@
 
 ;; Make sure we *cannot* connect to a non-existent database
 (expect :exception-thrown
-  (try (driver/can-connect? (H2Driver.) {:db (str (System/getProperty "user.dir") "/toucan_sightings")})
+  (try (driver/can-connect? :h2 {:db (str (System/getProperty "user.dir") "/toucan_sightings")})
        (catch org.h2.jdbc.JdbcSQLException e
          (and (re-matches #"Database .+ not found .+" (.getMessage e))
               :exception-thrown))))
@@ -40,7 +40,7 @@
 ;; Metabase database)
 (expect true
   (binding [mdb/*allow-potentailly-unsafe-connections* true]
-    (driver/can-connect? (H2Driver.) {:db (str (System/getProperty "user.dir") "/pigeon_sightings")})))
+    (driver/can-connect? :h2 {:db (str (System/getProperty "user.dir") "/pigeon_sightings")})))
 
 (expect-with-engine :h2
   "UTC"

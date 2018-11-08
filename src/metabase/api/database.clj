@@ -3,6 +3,7 @@
   (:require [clojure.string :as str]
             [clojure.tools.logging :as log]
             [compojure.core :refer [DELETE GET POST PUT]]
+            [metabase.util.i18n :refer [tru]]
             [metabase
              [config :as config]
              [driver :as driver]
@@ -10,6 +11,7 @@
              [public-settings :as public-settings]
              [sample-data :as sample-data]
              [util :as u]]
+            [metabase.driver.util :as driver.u]
             [metabase.api
              [common :as api]
              [table :as table-api]]
@@ -37,8 +39,11 @@
 
 (def DBEngineString
   "Schema for a valid database engine name, e.g. `h2` or `postgres`."
-  (su/with-api-error-message (s/constrained su/NonBlankString driver/is-engine? "Valid database engine")
-    "value must be a valid database engine."))
+  (su/with-api-error-message (s/constrained
+                              su/NonBlankString
+                              #(driver/registered? (keyword %))
+                              "Valid database engine")
+    (tru "value must be a valid database engine.")))
 
 
 ;;; ----------------------------------------------- GET /api/database ------------------------------------------------
@@ -69,8 +74,8 @@
 
 (defn- card-database-supports-nested-queries? [{{database-id :database} :dataset_query, :as card}]
   (when database-id
-    (when-let [driver (driver/database-id->driver database-id)]
-      (and (driver/driver-supports? driver :nested-queries)
+    (when-let [driver (driver.u/database->driver database-id)]
+      (and (driver/supports? driver :nested-queries)
            (mi/can-read? card)))))
 
 (defn- card-has-ambiguous-columns?
@@ -308,7 +313,7 @@
           details (assoc details :engine engine)]
       (try
         (cond
-          (driver/can-connect-with-details? engine details :rethrow-exceptions)
+          (driver.u/can-connect-with-details? engine details :rethrow-exceptions)
           nil
 
           (and host port (u/host-port-up? host port))
@@ -331,7 +336,7 @@
   "Does the given `engine` have an `:ssl` setting?"
   [engine]
   {:pre [(driver/is-engine? engine)]}
-  (let [driver-props (set (for [field (driver/details-fields (driver/engine->driver engine))]
+  (let [driver-props (set (for [field (driver/details-fields engine)]
                             (:name field)))]
     (contains? driver-props "ssl")))
 

@@ -124,7 +124,7 @@
 (defn- field-was-fingerprinted? {:style/indent 0} [fingerprint-versions field-properties]
   (let [fingerprinted? (atom false)]
     (with-redefs [i/fingerprint-version->types-that-should-be-re-fingerprinted fingerprint-versions
-                  driver/table-rows-sample                                     (constantly [[1] [2] [3] [4] [5]])
+                  metadata-queries/table-rows-sample                                     (constantly [[1] [2] [3] [4] [5]])
                   fingerprint/save-fingerprint!                                (fn [& _] (reset! fingerprinted? true))]
       (tt/with-temp* [Table [table]
                       Field [_ (assoc field-properties :table_id (u/get-id table))]]
@@ -214,8 +214,8 @@
                               :fingerprint         nil
                               :fingerprint_version 1
                               :last_analyzed       (du/->Timestamp #inst "2017-08-09")}]
-    (with-redefs [i/latest-fingerprint-version 3
-                  driver/table-rows-sample         (constantly [[1] [2] [3] [4] [5]])
-                  fingerprinters/fingerprinter (constantly (fingerprinters/constant-fingerprinter {:experimental {:fake-fingerprint? true}}))]
+    (with-redefs [i/latest-fingerprint-version       3
+                  metadata-queries/table-rows-sample (constantly [[1] [2] [3] [4] [5]])
+                  fingerprinters/fingerprinter       (constantly (fingerprinters/constant-fingerprinter {:experimental {:fake-fingerprint? true}}))]
       [(#'fingerprint/fingerprint-table! (Table (data/id :venues)) [field])
        (into {} (db/select-one [Field :fingerprint :fingerprint_version :last_analyzed] :id (u/get-id field)))])))

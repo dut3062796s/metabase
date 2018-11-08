@@ -1,11 +1,15 @@
 (ns metabase.test.data.sqlserver
   "Code for creating / destroying a SQLServer database from a `DatabaseDefinition`."
   (:require [clojure.java.jdbc :as jdbc]
-            [metabase.driver.generic-sql :as sql]
-            [metabase.test.data
-             [datasets :as datasets]
-             [generic-sql :as generic]
-             [interface :as i]]
+
+            [datasets :as datasets]
+            [metabase.test.data.interface :as tx]
+            [metabase.driver.sql.query-processor :as sql.qp]
+            [metabase.test.data.sql :as sql.tx]
+            [metabase.test.data.sql.ddl :as ddl]
+            [metabase.test.data.sql-jdbc.spec :as spec]
+            [metabase.test.data.sql-jdbc.execute :as execute]
+            [metabase.test.data.sql-jdbc.load-data :as load-data]
             [metabase.util :as u])
   (:import metabase.driver.sqlserver.SQLServerDriver))
 
@@ -33,11 +37,11 @@
 (defn- +suffix [db-name]
   (str db-name \_ @db-name-suffix-number))
 
-(defn- database->connection-details [context {:keys [database-name]}]
-  {:host         (i/db-test-env-var-or-throw :sqlserver :host)
-   :port         (Integer/parseInt (i/db-test-env-var-or-throw :sqlserver :port "1433"))
-   :user         (i/db-test-env-var-or-throw :sqlserver :user)
-   :password     (i/db-test-env-var-or-throw :sqlserver :password)
+(defmethod tx/database->connection-details [context {:keys [database-name]}]
+  {:host         (tx/db-test-env-var-or-throw :sqlserver :host)
+   :port         (Integer/parseInt (tx/db-test-env-var-or-throw :sqlserver :port "1433"))
+   :user         (tx/db-test-env-var-or-throw :sqlserver :user)
+   :password     (tx/db-test-env-var-or-throw :sqlserver :password)
    :db           (when (= context :db)
                    (+suffix database-name))})
 
@@ -51,7 +55,7 @@
                  END;"
          (repeat 3 (+suffix database-name))))
 
-(defn- drop-table-if-exists-sql [{:keys [database-name]} {:keys [table-name]}]
+(defmethod sql.tx/drop-table-if-exists-sql [{:keys [database-name]} {:keys [table-name]}]
   (let [db-name (+suffix database-name)]
     (format "IF object_id('%s.dbo.%s') IS NOT NULL DROP TABLE \"%s\".dbo.\"%s\";" db-name table-name db-name table-name)))
 
@@ -81,7 +85,7 @@
   {:expectations-options :before-run}
   []
   (datasets/when-testing-engine :sqlserver
-    (let [connection-spec (sql/connection-details->spec (SQLServerDriver.) (database->connection-details :server nil))
+    (let [connection-spec (sql-jdbc.conn/connection-details->spec (SQLServerDriver.) (database->connection-details :server nil))
           leftover-dbs    (mapv :name (jdbc/query connection-spec "SELECT name
                                                                    FROM   master.dbo.sysdatabases
                                                                    WHERE  name NOT IN ('tempdb', 'master', 'model', 'msdb', 'rdsadmin');"))]

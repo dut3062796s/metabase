@@ -1,11 +1,14 @@
 (ns metabase.test.data.vertica
   "Code for creating / destroying a Vertica database from a `DatabaseDefinition`."
-  (:require [metabase.driver.generic-sql :as sql]
-            [metabase.test.data
-             [generic-sql :as generic]
-             [interface :as i]]
-            [metabase.util :as u])
-  (:import metabase.driver.vertica.VerticaDriver))
+  (:require [metabase.test.data.interface :as tx]
+            [metabase.driver.sql.query-processor :as sql.qp]
+            [metabase.test.data.sql :as sql.tx]
+            [metabase.test.data.sql.ddl :as sql.ddl]
+            [metabase.test.data.sql-jdbc.spec :as spec]
+            [metabase.test.data.sql-jdbc.execute :as execute]
+            [metabase.test.data.sql-jdbc.load-data :as load-data]
+             [interface :as i]
+            [metabase.util :as u]))
 
 (def ^:private ^:const field-base-type->sql-type
   {:type/BigInteger "BIGINT"
@@ -21,21 +24,21 @@
 
 
 (defn- db-name []
-  (i/db-test-env-var-or-throw :vertica :db "docker"))
+  (tx/db-test-env-var-or-throw :vertica :db "docker"))
 
 (def ^:private db-connection-details
-  (delay {:host     (i/db-test-env-var-or-throw :vertica :host "localhost")
-          :port     (Integer/parseInt (i/db-test-env-var-or-throw :vertica :port "5433"))
-          :user     (i/db-test-env-var :vertica :user "dbadmin")
-          :password (i/db-test-env-var :vertica :password)
+  (delay {:host     (tx/db-test-env-var-or-throw :vertica :host "localhost")
+          :port     (Integer/parseInt (tx/db-test-env-var-or-throw :vertica :port "5433"))
+          :user     (tx/db-test-env-var :vertica :user "dbadmin")
+          :password (tx/db-test-env-var :vertica :password)
           :db       (db-name)
           :timezone :America/Los_Angeles ; why?
           }))
 
 (defn- qualified-name-components
   ([_]                             [(db-name)])
-  ([db-name table-name]            ["public" (i/db-qualified-table-name db-name table-name)])
-  ([db-name table-name field-name] ["public" (i/db-qualified-table-name db-name table-name) field-name]))
+  ([db-name table-name]            ["public" (tx/db-qualified-table-name db-name table-name)])
+  ([db-name table-name field-name] ["public" (tx/db-qualified-table-name db-name table-name) field-name]))
 
 
 (u/strict-extend VerticaDriver
@@ -43,12 +46,12 @@
   (merge generic/DefaultsMixin
          {:create-db-sql             (constantly nil)
           :drop-db-if-exists-sql     (constantly nil)
-          :drop-table-if-exists-sql  generic/drop-table-if-exists-cascade-sql
+          :drop-table-if-exists-sql  sql.tx/drop-table-if-exists-cascade-sql
           :field-base-type->sql-type (u/drop-first-arg field-base-type->sql-type)
           :load-data!                generic/load-data-one-at-a-time-parallel!
           :pk-sql-type               (constantly "INTEGER")
           :qualified-name-components (u/drop-first-arg qualified-name-components)
-          :execute-sql!              generic/sequentially-execute-sql!})
+          :execute-sql!              execute/sequentially-execute-sql!})
   i/IDriverTestExtensions
   (merge generic/IDriverTestExtensionsMixin
          {:database->connection-details       (fn [& _] @db-connection-details)
@@ -58,7 +61,7 @@
 
 
 (defn- dbspec [& _]
-  (sql/connection-details->spec (VerticaDriver.) @db-connection-details))
+  (sql-jdbc.conn/connection-details->spec :vertica @db-connection-details))
 
 (defn- set-max-client-sessions!
   {:expectations-options :before-run}
@@ -66,4 +69,4 @@
   ;; Close all existing sessions connected to our test DB
   (generic/query-when-testing! :vertica dbspec "SELECT CLOSE_ALL_SESSIONS();")
   ;; Increase the connection limit; the default is 5 or so which causes tests to fail when too many connections are made
-  (generic/execute-when-testing! :vertica dbspec (format "ALTER DATABASE \"%s\" SET MaxClientSessions = 10000;" (db-name))))
+  (sql-jdbc.tx/execute-when-testing! :vertica dbspec (format "ALTER DATABASE \"%s\" SET MaxClientSessions = 10000;" (db-name))))

@@ -4,9 +4,9 @@
             [honeysql
              [core :as hsql]
              [helpers :as h]]
-            [metabase.driver.generic-sql.util.unprepare :as unprepare]
+            [metabase.driver.sql.util.unprepare :as unprepare]
             [metabase.driver.presto :as presto]
-            [metabase.test.data.interface :as i]
+            [metabase.test.data.interface :as tx]
             [metabase.util :as u])
   (:import java.util.Date
            metabase.driver.presto.PrestoDriver))
@@ -18,18 +18,18 @@
 ;; `db-qualified-table-name` like everyone else.
 (def ^:private test-catalog-name "test-data")
 
-(defn- database->connection-details [context {:keys [database-name]}]
-  (merge {:host    (i/db-test-env-var-or-throw :presto :host "localhost")
-          :port    (i/db-test-env-var-or-throw :presto :port "8080")
-          :user    (i/db-test-env-var-or-throw :presto :user "metabase")
+(defmethod tx/database->connection-details [context {:keys [database-name]}]
+  (merge {:host    (tx/db-test-env-var-or-throw :presto :host "localhost")
+          :port    (tx/db-test-env-var-or-throw :presto :port "8080")
+          :user    (tx/db-test-env-var-or-throw :presto :user "metabase")
           :ssl     false
           :catalog test-catalog-name}))
 
 (defn- qualify-name
   ;; use the default schema from the in-memory connector
   ([db-name]                       [test-catalog-name "default"])
-  ([db-name table-name]            [test-catalog-name "default" (i/db-qualified-table-name db-name table-name)])
-  ([db-name table-name field-name] [test-catalog-name "default" (i/db-qualified-table-name db-name table-name) field-name]))
+  ([db-name table-name]            [test-catalog-name "default" (tx/db-qualified-table-name db-name table-name)])
+  ([db-name table-name field-name] [test-catalog-name "default" (tx/db-qualified-table-name db-name table-name) field-name]))
 
 (defn- qualify+quote-name [& names]
   (apply #'presto/quote+combine-names (apply qualify-name names)))
@@ -62,7 +62,7 @@
             (str/join \, dummy-values)
             (str/join \, (map #'presto/quote-name columns)))))
 
-(defn- drop-table-if-exists-sql [{:keys [database-name]} {:keys [table-name]}]
+(defmethod sql.tx/drop-table-if-exists-sql [{:keys [database-name]} {:keys [table-name]}]
   (str "DROP TABLE IF EXISTS " (qualify+quote-name database-name table-name)))
 
 (defn- insert-sql [{:keys [database-name]} {:keys [table-name], :as tabledef} rows]
